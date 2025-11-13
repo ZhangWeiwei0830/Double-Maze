@@ -14,6 +14,7 @@ BG_PATH = "assets/background.png"  # 使用像素风格的草地背景
 BLUE_PATH = "maze/assets/blue_player.png"
 RED_PATH = "maze/assets/red_player.png"
 CHEST_PATH = "assets/treasure_chest.png"  # 宝箱图片
+BOX_PATH = "assets/box.png"  # 障碍物箱子图片
 
 # 你图上的起点 — 蓝在左上、红在左下（带一点内边距）
 BLUE_START = (20, 20)
@@ -125,6 +126,11 @@ def main():
     # 更新终点区域以匹配宝箱大小（保持碰撞检测准确）
     # 宝箱将居中显示在原来的终点位置
     chest_rect = chest_img.get_rect(center=END_ZONE.center)
+    
+    # 加载障碍物箱子图片
+    box_img_original = pygame.image.load(BOX_PATH).convert_alpha()
+    # 箱子缩放到40x40像素（与迷宫单元格大小一致）
+    box_img = pygame.transform.smoothscale(box_img_original, (40, 40))
 
     # 不使用像素级碰撞检测，使用矩形碰撞
     hay_wall_mask = pygame.mask.Mask((WIDTH, HEIGHT))  # all False (no collisions)
@@ -336,28 +342,22 @@ def main():
         # ---------- 绘制 ----------
         screen.blit(bg, (0, 0))
 
-        # 绘制障碍物 - 使用明显的草垛颜色
-        HAY_COLOR_LIGHT = (200, 160, 50)   # 亮黄色（高光）
-        HAY_COLOR_MAIN = (170, 130, 40)    # 主体黄色
-        HAY_COLOR_DARK = (120, 90, 30)     # 阴影黄棕色
-        HAY_BORDER = (80, 60, 20)          # 深棕色边框
-        
+        # 绘制障碍物 - 使用箱子图片平铺
         for r in OBSTACLES:
-            # 绘制草垛主体（渐变效果）
-            pygame.draw.rect(screen, HAY_COLOR_MAIN, r)
-            
-            # 添加一些纹理细节（横条纹模拟草垛的层次）
-            for i in range(0, r.height, 8):
-                line_y = r.top + i
-                if i % 16 < 8:
-                    pygame.draw.line(screen, HAY_COLOR_LIGHT, 
-                                   (r.left, line_y), (r.right, line_y), 2)
-                else:
-                    pygame.draw.line(screen, HAY_COLOR_DARK, 
-                                   (r.left, line_y), (r.right, line_y), 1)
-            
-            # 绘制明显的深色边框
-            pygame.draw.rect(screen, HAY_BORDER, r, 3)
+            # 用40x40的箱子图片平铺填充整个障碍物区域
+            for y in range(r.top, r.bottom, 40):
+                for x in range(r.left, r.right, 40):
+                    # 计算需要绘制的区域（处理边缘不完整的情况）
+                    draw_width = min(40, r.right - x)
+                    draw_height = min(40, r.bottom - y)
+                    
+                    if draw_width == 40 and draw_height == 40:
+                        # 完整的箱子
+                        screen.blit(box_img, (x, y))
+                    else:
+                        # 部分箱子（裁剪）
+                        src_rect = pygame.Rect(0, 0, draw_width, draw_height)
+                        screen.blit(box_img, (x, y), src_rect)
 
         # 绘制终点宝箱（按原始宽高比居中显示）
         screen.blit(chest_img, chest_rect.topleft)
