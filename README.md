@@ -50,38 +50,51 @@ pip install pygame pillow
 
 ### 运行游戏
 
-\`\`\`bash
-python maze_game.py
-\`\`\`
+# Double Maze
 
-## 文件结构
+Double Maze is a local two-player maze racing game built with Pygame. Each round
+generates a new maze and both players race to the golden chest on the right.
 
-\`\`\`
-.
-├── maze_game.py              # 主游戏文件
-├── assets/
-│   ├── background.png        # 草地背景图片
-│   ├── box.png               # 箱子障碍物图片
-│   └── treasure_chest.png    # 宝箱图片
-└── maze/
-    └── assets/
-        ├── blue_player.png   # 蓝色玩家图片
-        └── red_player.png    # 红色玩家图片
-\`\`\`
+This repository contains a small pixel-art themed game with the following highlights:
 
-## 技术特点
+- Two-player local multiplayer (Blue player: WASD, Red player: Arrow keys)
+- Random maze generation (perfect maze using recursive backtracker)
+- 3-minute match timer; closer player wins on tie by distance
+- Pixel-art visuals and tile-based obstacle rendering
 
-- 使用递归回溯算法生成完美迷宫
-- 基于矩形的碰撞检测系统
-- 保持图片原始宽高比的缩放
-- 箱子图片平铺渲染障碍物
-- 像素艺术风格的视觉效果
+Recent changes (in this branch)
+- New start screen with custom background image and retro PressStart2P font
+- Colored text and drop-shadows on the start screen and in-game HUD
+- Optional looping menu music (place audio file at assets/menu_music.*)
 
-## 视觉特点
+Requirements
+- Python 3.6+
+- pygame
+- pillow (PIL)
 
-- **背景**: 像素风格的草地纹理
-- **障碍物**: 40x40像素的箱子平铺排列
-- **终点**: 保持宽高比的金色宝箱
-- **玩家**: 32x32像素的蓝色和红色角色
+Install dependencies
+```
+pip install pygame pillow
+```
 
-祝您游戏愉快！🎮
+Run the game
+```
+python3 maze_game.py
+```
+
+Files of interest
+- `maze_game.py` - main game script (entry point)
+- `assets/` - images, fonts and optional music
+    - `assets/PressStart2P-Regular.ttf` - retro font used by the UI
+    - `assets/instruction- background.JPG` - custom start-screen background
+
+Notes
+- If you want the menu music, add a file named `menu_music.mp3` / `.ogg` / `.wav` in
+    the `assets/` folder.
+- To push changes to your GitHub repo, make sure your remote is configured and you
+    have push access (we pushed this branch to your remote during the session).
+
+License & credits
+- The project is small; include attribution for any third-party assets you add.
+
+Enjoy playing!
