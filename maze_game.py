@@ -10,11 +10,13 @@ WIDTH, HEIGHT = 800, 480
 FPS = 60
 TIMER_SECONDS = 3 * 60  # 3 分钟
 
-BG_PATH = "assets/background.png"  # 使用像素风格的草地背景
+BG_PATH = "assets/background_new.png"  # 使用像素风格的草地背景
 BLUE_PATH = "maze/assets/blue_player.png"
+BLUE_STAND_PATH = "maze/assets/blue_player_stand.png"
 RED_PATH = "maze/assets/red_player.png"
+RED_STAND_PATH = "maze/assets/red_player_stand.png"
 CHEST_PATH = "assets/treasure_chest.png"  # 宝箱图片
-BOX_PATH = "assets/box.png"  # 障碍物箱子图片
+GRASS_PATH = "assets/Grass.png"  # 障碍物草丛图片
 
 # 你图上的起点 — 蓝在左上、红在左下（带一点内边距）
 BLUE_START = (20, 20)
@@ -80,8 +82,7 @@ def main():
     pygame.display.set_caption("Pixel Maze Duel")
     clock = pygame.time.Clock()
 
-    # keep keyboard focus so get_pressed() works after clicks
-    pygame.event.set_grab(True)
+    # 显示鼠标，允许鼠标自由移出窗口
     pygame.mouse.set_visible(True)
 
     # 加载背景图片
@@ -102,13 +103,33 @@ def main():
         hay_texture = pygame.Surface((40, 40))
         hay_texture.fill((140, 100, 30))  # 棕黄色
 
-    # 玩家贴图
-    blue_img = pygame.transform.smoothscale(
-        pygame.image.load(BLUE_PATH).convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE)
-    )
-    red_img = pygame.transform.smoothscale(
-        pygame.image.load(RED_PATH).convert_alpha(), (PLAYER_SIZE, PLAYER_SIZE)
-    )
+    # 玩家贴图 - 加载行走和站立两种状态，保持原始宽高比
+    # 统一使用相同的目标高度，确保所有玩家图片大小一致
+    PLAYER_HEIGHT = PLAYER_SIZE  # 32像素高度
+    
+    # 蓝色玩家 - 行走图
+    blue_original = pygame.image.load(BLUE_PATH).convert_alpha()
+    blue_ratio = blue_original.get_width() / blue_original.get_height()
+    blue_width = int(PLAYER_HEIGHT * blue_ratio)
+    blue_img = pygame.transform.smoothscale(blue_original, (blue_width, PLAYER_HEIGHT))
+    
+    # 蓝色玩家 - 站立图
+    blue_stand_original = pygame.image.load(BLUE_STAND_PATH).convert_alpha()
+    blue_stand_ratio = blue_stand_original.get_width() / blue_stand_original.get_height()
+    blue_stand_width = int(PLAYER_HEIGHT * blue_stand_ratio)
+    blue_stand_img = pygame.transform.smoothscale(blue_stand_original, (blue_stand_width, PLAYER_HEIGHT))
+    
+    # 红色玩家 - 行走图
+    red_original = pygame.image.load(RED_PATH).convert_alpha()
+    red_ratio = red_original.get_width() / red_original.get_height()
+    red_width = int(PLAYER_HEIGHT * red_ratio)
+    red_img = pygame.transform.smoothscale(red_original, (red_width, PLAYER_HEIGHT))
+    
+    # 红色玩家 - 站立图
+    red_stand_original = pygame.image.load(RED_STAND_PATH).convert_alpha()
+    red_stand_ratio = red_stand_original.get_width() / red_stand_original.get_height()
+    red_stand_width = int(PLAYER_HEIGHT * red_stand_ratio)
+    red_stand_img = pygame.transform.smoothscale(red_stand_original, (red_stand_width, PLAYER_HEIGHT))
     
     # 加载宝箱图片作为终点标记
     chest_img_original = pygame.image.load(CHEST_PATH).convert_alpha()
@@ -127,10 +148,10 @@ def main():
     # 宝箱将居中显示在原来的终点位置
     chest_rect = chest_img.get_rect(center=END_ZONE.center)
     
-    # 加载障碍物箱子图片
-    box_img_original = pygame.image.load(BOX_PATH).convert_alpha()
-    # 箱子缩放到40x40像素（与迷宫单元格大小一致）
-    box_img = pygame.transform.smoothscale(box_img_original, (40, 40))
+    # 加载障碍物草丛图片
+    grass_img_original = pygame.image.load(GRASS_PATH).convert_alpha()
+    # 草丛缩放到40x40像素（与迷宫单元格大小一致）
+    grass_img = pygame.transform.smoothscale(grass_img_original, (40, 40))
 
     # 不使用像素级碰撞检测，使用矩形碰撞
     hay_wall_mask = pygame.mask.Mask((WIDTH, HEIGHT))  # all False (no collisions)
@@ -237,6 +258,11 @@ def main():
     blue_x, blue_y = BLUE_START
     red_x, red_y = RED_START
 
+    # 动画计数器 - 用于控制走路动画的切换
+    blue_anim_counter = 0
+    red_anim_counter = 0
+    ANIM_SPEED = 10  # 每10帧切换一次动画
+
     start_ticks = pygame.time.get_ticks()
     font = pygame.font.SysFont("arial", 28, True)
     small_font = pygame.font.SysFont("arial", 20, True)
@@ -259,25 +285,35 @@ def main():
                     red_x, red_y = RED_START
                     start_ticks = pygame.time.get_ticks()
                     winner = None
+                    blue_anim_counter = 0
+                    red_anim_counter = 0
                     # regenerate a fresh random maze on restart
                     OBSTACLES = generate_obstacles(cell=40, passage_expand=0)
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # re-grab input if user clicked away and came back
-                pygame.event.set_grab(True)
 
         keys = pygame.key.get_pressed()
 
         if winner is None:
             # ---------- 蓝玩家移动 (WASD) ----------
             old_bx, old_by = blue_x, blue_y
+            blue_moving = False
             if keys[pygame.K_w]:
                 blue_y -= PLAYER_SPEED
+                blue_moving = True
             if keys[pygame.K_s]:
                 blue_y += PLAYER_SPEED
+                blue_moving = True
             if keys[pygame.K_a]:
                 blue_x -= PLAYER_SPEED
+                blue_moving = True
             if keys[pygame.K_d]:
                 blue_x += PLAYER_SPEED
+                blue_moving = True
+
+            # 更新蓝色玩家动画计数器
+            if blue_moving:
+                blue_anim_counter += 1
+            else:
+                blue_anim_counter = 0
 
             blue_rect = pygame.Rect(int(blue_x), int(blue_y), PLAYER_SIZE, PLAYER_SIZE)
             blue_rect.clamp_ip(pygame.Rect(0, 0, WIDTH, HEIGHT))
@@ -294,14 +330,25 @@ def main():
 
             # ---------- 红玩家移动 (方向键) ----------
             old_rx, old_ry = red_x, red_y
+            red_moving = False
             if keys[pygame.K_UP]:
                 red_y -= PLAYER_SPEED
+                red_moving = True
             if keys[pygame.K_DOWN]:
                 red_y += PLAYER_SPEED
+                red_moving = True
             if keys[pygame.K_LEFT]:
                 red_x -= PLAYER_SPEED
+                red_moving = True
             if keys[pygame.K_RIGHT]:
                 red_x += PLAYER_SPEED
+                red_moving = True
+
+            # 更新红色玩家动画计数器
+            if red_moving:
+                red_anim_counter += 1
+            else:
+                red_anim_counter = 0
 
             red_rect = pygame.Rect(int(red_x), int(red_y), PLAYER_SIZE, PLAYER_SIZE)
             red_rect.clamp_ip(pygame.Rect(0, 0, WIDTH, HEIGHT))
@@ -342,9 +389,9 @@ def main():
         # ---------- 绘制 ----------
         screen.blit(bg, (0, 0))
 
-        # 绘制障碍物 - 使用箱子图片平铺
+        # 绘制障碍物 - 使用草丛图片平铺
         for r in OBSTACLES:
-            # 用40x40的箱子图片平铺填充整个障碍物区域
+            # 用40x40的草丛图片平铺填充整个障碍物区域
             for y in range(r.top, r.bottom, 40):
                 for x in range(r.left, r.right, 40):
                     # 计算需要绘制的区域（处理边缘不完整的情况）
@@ -352,12 +399,12 @@ def main():
                     draw_height = min(40, r.bottom - y)
                     
                     if draw_width == 40 and draw_height == 40:
-                        # 完整的箱子
-                        screen.blit(box_img, (x, y))
+                        # 完整的草丛
+                        screen.blit(grass_img, (x, y))
                     else:
-                        # 部分箱子（裁剪）
+                        # 部分草丛（裁剪）
                         src_rect = pygame.Rect(0, 0, draw_width, draw_height)
-                        screen.blit(box_img, (x, y), src_rect)
+                        screen.blit(grass_img, (x, y), src_rect)
 
         # 绘制终点宝箱（按原始宽高比居中显示）
         screen.blit(chest_img, chest_rect.topleft)
@@ -370,9 +417,28 @@ def main():
         timer_surf = font.render(f"{m}:{s:02d}", True, (255, 204, 0))
         screen.blit(timer_surf, (WIDTH // 2 - timer_surf.get_width() // 2, 8))
 
-        # 玩家（只画一次）
-        screen.blit(blue_img, (int(blue_x), int(blue_y)))
-        screen.blit(red_img, (int(red_x), int(red_y)))
+        # 玩家 - 根据是否移动选择不同的图片
+        # 蓝色玩家
+        if blue_anim_counter > 0:
+            # 正在移动，使用动画切换
+            if (blue_anim_counter // ANIM_SPEED) % 2 == 0:
+                screen.blit(blue_img, (int(blue_x), int(blue_y)))
+            else:
+                screen.blit(blue_stand_img, (int(blue_x), int(blue_y)))
+        else:
+            # 静止状态
+            screen.blit(blue_stand_img, (int(blue_x), int(blue_y)))
+        
+        # 红色玩家
+        if red_anim_counter > 0:
+            # 正在移动，使用动画切换
+            if (red_anim_counter // ANIM_SPEED) % 2 == 0:
+                screen.blit(red_img, (int(red_x), int(red_y)))
+            else:
+                screen.blit(red_stand_img, (int(red_x), int(red_y)))
+        else:
+            # 静止状态
+            screen.blit(red_stand_img, (int(red_x), int(red_y)))
 
         # 底部文字
         info = small_font.render("Blue: WASD   Red: Arrows   R: restart   ESC: quit", True, (255, 255, 255))
