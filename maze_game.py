@@ -82,6 +82,245 @@ def main():
     pygame.display.set_caption("Pixel Maze Duel")
     clock = pygame.time.Clock()
 
+    # 尝试加载 Press Start 2P 字体（放在 assets 中），没有则回退到系统字体
+    def load_press_start_font(size):
+        possible_paths = ["assets/PressStart2P-Regular.ttf", "assets/pressstart2p.ttf"]
+        for p in possible_paths:
+            fp = Path(p)
+            if fp.exists():
+                try:
+                    font_obj = pygame.font.Font(str(fp), size)
+                    # indicate which font file was loaded (helpful for debugging)
+                    print(f"[font] loaded {fp} for size {size}")
+                    return font_obj
+                except Exception:
+                    continue
+        # 回退到内置的等宽字体作为近似
+        return pygame.font.SysFont("consolas", size, bold=False)
+
+    def show_start_screen():
+        # 半透明遮罩 + 文本，等待鼠标点击开始
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        # set semi-transparent black overlay (alpha 64 ~= 25%)
+        overlay.fill((0, 0, 0, 64))
+        # increase start-screen fonts to double size
+        title_font = load_press_start_font(30)
+        instr_font = load_press_start_font(18)
+        # English instructions as requested, and a centered yellow square button labeled 'Start'
+        lines = [
+            "Double Maze",
+            "",
+            "Controls",
+            "A (Blue): WASD   B (Red): Arrows",
+            "Keys: R = Restart   ESC = Quit",
+            "",
+            "Goal",
+            "Reach the golden chest on the right first.",
+            "If time runs out, the closer player wins.",
+            ""
+        ]
+        # try to load a custom instruction background from assets (several common name variants)
+        start_bg = None
+        candidate_paths = [
+            "assets/instruction- background.JPG",
+            "assets/instruction-background.JPG",
+            "assets/instruction_background.JPG",
+            "assets/instruction-background.jpg",
+            "assets/instruction- background.jpg",
+        ]
+        for p in candidate_paths:
+            if Path(p).exists():
+                try:
+                    img = pygame.image.load(p).convert()
+                    if img.get_size() != (WIDTH, HEIGHT):
+                        img = pygame.transform.scale(img, (WIDTH, HEIGHT))
+                    start_bg = img
+                    print(f"[start-bg] loaded {p}")
+                    break
+                except Exception:
+                    continue
+        # fallback to the default background if custom start image not found
+        if start_bg is None:
+            try:
+                start_bg = bg
+            except Exception:
+                start_bg = None
+
+        # Create the start button (yellow) -- set its height to 1/3 of btn_size as requested
+        btn_size = 120
+        btn_height = int(btn_size * 1 / 3)
+        btn_color = (255, 204, 0)  # yellow
+        btn_text_color = (0, 0, 0)  # black
+        # Move the button to the bottom-right corner with some padding
+        padding = 18
+        btn_rect = pygame.Rect(WIDTH - btn_size - padding, HEIGHT - btn_height - padding, btn_size, btn_height)
+
+        # try to play menu music if available
+        music_paths = ["assets/menu_music.mp3", "assets/menu_music.ogg", "assets/menu_music.wav"]
+        music_loaded = False
+        try:
+            pygame.mixer.init()
+            for mp in music_paths:
+                if Path(mp).exists():
+                    try:
+                        pygame.mixer.music.load(mp)
+                        pygame.mixer.music.set_volume(0.6)
+                        pygame.mixer.music.play(-1)
+                        music_loaded = True
+                        print(f"[music] playing {mp}")
+                        break
+                    except Exception:
+                        continue
+        except Exception:
+            music_loaded = False
+
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    mx, my = event.pos
+                    if btn_rect.collidepoint(mx, my):
+                        # stop menu music when starting
+                        try:
+                            if music_loaded:
+                                pygame.mixer.music.fadeout(300)
+                        except Exception:
+                            pass
+                        return
+
+            # use custom start background if available
+            if start_bg is not None:
+                screen.blit(start_bg, (0, 0))
+            else:
+                screen.blit(bg, (0, 0))
+            screen.blit(overlay, (0, 0))
+
+            # Draw the instruction lines with shadow and color accents
+            # Section titles (Player Controls, Game Controls, Rules) are centered.
+            # For Player/Game Controls: the following lines (their content) are left-aligned.
+            # Numbered rules (lines starting with a digit) are left-aligned; the 'Rules' title itself is centered.
+            y = HEIGHT // 2 - len(lines) * 10
+            current_section = None
+            # layout controls
+            LINE_GAP = 28
+            TITLE_GAP = int(LINE_GAP * 1.5)
+            # helper to draw a justified line between left_x and right_x
+            def draw_justified_line(surf_s, font_s, text_s, left_x, right_x, y_pos, color, shadow_color=(10,10,10)):
+                words = text_s.split()
+                if not words:
+                    return
+                # widths of each word
+                w_widths = [font_s.size(w)[0] for w in words]
+                total_w = sum(w_widths)
+                space_available = right_x - left_x - total_w
+                gaps = max(1, len(words) - 1)
+                if space_available > 0 and gaps > 0:
+                    gap = space_available / gaps
+                else:
+                    gap = font_s.size(' ')[0]
+
+                x = left_x
+                for idx, w in enumerate(words):
+                    sh = font_s.render(w, True, shadow_color)
+                    fg = font_s.render(w, True, color)
+                    surf_s.blit(sh, (x + 2, y_pos + 2))
+                    surf_s.blit(fg, (x, y_pos))
+                    x += w_widths[idx] + gap
+
+            # compute total height of the whole start-screen text group so we can center it
+            total_height = 0
+            for i, ln in enumerate(lines):
+                stripped = ln.strip()
+                if i == 0:
+                    total_height += LINE_GAP
+                elif stripped == "":
+                    total_height += LINE_GAP
+                elif stripped in ("Controls", "Goal"):
+                    total_height += TITLE_GAP
+                else:
+                    total_height += LINE_GAP
+
+            start_y = (HEIGHT - total_height) // 2
+            current_y = start_y
+            for i, ln in enumerate(lines):
+                stripped = ln.strip()
+                # choose font: title_font only for the main title (i==0), otherwise instr_font
+                f = title_font if i == 0 else instr_font
+
+                # main title (double maze) centered
+                if i == 0:
+                    surf = f.render(ln, True, (255,255,255))
+                    shadow = f.render(ln, True, (10,10,10))
+                    screen.blit(shadow, (WIDTH // 2 - surf.get_width() // 2 + 2, current_y + 2))
+                    screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, current_y))
+                    current_section = None
+                    current_y += LINE_GAP
+                    continue
+
+                # Controls title: centered and blue, but use instr_font (same size as body)
+                if stripped == "Controls":
+                    surf = instr_font.render(ln, True, (30,140,200))
+                    shadow = instr_font.render(ln, True, (10,10,10))
+                    screen.blit(shadow, (WIDTH // 2 - surf.get_width() // 2 + 2, current_y + 2))
+                    screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, current_y))
+                    current_section = "Controls"
+                    current_y += TITLE_GAP
+                    continue
+
+                # Goal title: centered and yellow, but same size as body
+                if stripped == "Goal":
+                    surf = instr_font.render(ln, True, (255,204,0))
+                    shadow = instr_font.render(ln, True, (10,10,10))
+                    screen.blit(shadow, (WIDTH // 2 - surf.get_width() // 2 + 2, current_y + 2))
+                    screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, current_y))
+                    current_section = "Goal"
+                    current_y += TITLE_GAP
+                    continue
+
+                # blank line
+                if stripped == "":
+                    current_section = None
+                    current_y += LINE_GAP
+                    continue
+
+                # content under Controls: justify between margins
+                if current_section == "Controls":
+                    left_margin = 60
+                    right_margin = WIDTH - 60
+                    draw_justified_line(screen, instr_font, ln, left_margin, right_margin, current_y, (255,255,255))
+                    current_y += LINE_GAP
+                    continue
+
+                # content under Goal: left align
+                if current_section == "Goal":
+                    left_margin = 40
+                    sh = instr_font.render(ln, True, (10,10,10))
+                    fg = instr_font.render(ln, True, (255,255,255))
+                    screen.blit(sh, (left_margin + 2, current_y + 2))
+                    screen.blit(fg, (left_margin, current_y))
+                    current_y += LINE_GAP
+                    continue
+
+                # default: centered small lines
+                surf = instr_font.render(ln, True, (255,255,255))
+                shadow = instr_font.render(ln, True, (10,10,10))
+                screen.blit(shadow, (WIDTH // 2 - surf.get_width() // 2 + 2, current_y + 2))
+                screen.blit(surf, (WIDTH // 2 - surf.get_width() // 2, current_y))
+                current_y += LINE_GAP
+
+            # Draw the yellow start rectangle with centered black text 'Start'
+            pygame.draw.rect(screen, btn_color, btn_rect)
+            start_surf = instr_font.render("Start", True, btn_text_color)
+            screen.blit(start_surf, (btn_rect.centerx - start_surf.get_width() // 2,
+                                     btn_rect.centery - start_surf.get_height() // 2))
+
+            pygame.display.flip()
+            clock.tick(30)
+
+    # (start screen will be shown after background is loaded)
+
     # 显示鼠标，允许鼠标自由移出窗口
     pygame.mouse.set_visible(True)
 
@@ -92,6 +331,8 @@ def main():
     
     # 直接使用背景图片
     bg = bg_image.copy()
+    # Show the start screen now that the background is ready
+    show_start_screen()
     
     # 从背景图片中提取一个草垛块作为纹理（如果需要）
     # 草垛纹理：从图片中提取一个40x40的区域
@@ -264,8 +505,16 @@ def main():
     ANIM_SPEED = 10  # 每10帧切换一次动画
 
     start_ticks = pygame.time.get_ticks()
-    font = pygame.font.SysFont("arial", 28, True)
-    small_font = pygame.font.SysFont("arial", 20, True)
+    # Use PressStart2P font everywhere when available
+    font = load_press_start_font(14)
+    small_font = load_press_start_font(10)
+
+    # helper to draw text with shadow and optional color
+    def draw_text_with_shadow(surf, font_obj, text, pos, color=(255,255,255), shadow_offset=(2,2), shadow_color=(10,10,10)):
+        sh = font_obj.render(text, True, shadow_color)
+        fg = font_obj.render(text, True, color)
+        surf.blit(sh, (pos[0] + shadow_offset[0], pos[1] + shadow_offset[1]))
+        surf.blit(fg, pos)
 
     winner = None
 
@@ -409,13 +658,34 @@ def main():
         # 绘制终点宝箱（按原始宽高比居中显示）
         screen.blit(chest_img, chest_rect.topleft)
 
-        # 计时器
+        # 计时器 — 使用半透明背景并且根据文字大小自动缩放（50% 透明度）
         elapsed = (pygame.time.get_ticks() - start_ticks) // 1000
         remaining = max(0, TIMER_SECONDS - elapsed)
         m, s = divmod(remaining, 60)
-        pygame.draw.rect(screen, (0, 0, 0), (120, 0, 560, 48))
-        timer_surf = font.render(f"{m}:{s:02d}", True, (255, 204, 0))
-        screen.blit(timer_surf, (WIDTH // 2 - timer_surf.get_width() // 2, 8))
+        timer_text = f"{m}:{s:02d}"
+        # draw timer with shadow
+        # create timer surface using helper for consistent shadow
+        # but still need size for background
+        timer_surf = font.render(timer_text, True, (255, 204, 0))
+
+        # 动态背景尺寸（左右/上下留白）
+        pad_x, pad_y = 12, 6
+        bg_w = timer_surf.get_width() + pad_x * 2
+        bg_h = timer_surf.get_height() + pad_y * 2
+
+        # 创建支持 alpha 的 surface，并用半透明黑色填充（128/255 ~= 50%）
+        bg_surf = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
+        bg_surf.fill((0, 0, 0, 128))
+
+        # 居中显示在屏幕上方（稍微向下偏移以保证不贴边）
+        bg_x = WIDTH // 2 - bg_w // 2
+        bg_y = 6
+        screen.blit(bg_surf, (bg_x, bg_y))
+
+        # 在背景内绘制计时文字（垂直居中）
+        text_x = bg_x + pad_x
+        text_y = bg_y + pad_y - 1
+        draw_text_with_shadow(screen, font, timer_text, (text_x, text_y), color=(255,204,0), shadow_offset=(2,2), shadow_color=(10,10,10))
 
         # 玩家 - 根据是否移动选择不同的图片
         # 蓝色玩家
@@ -441,8 +711,8 @@ def main():
             screen.blit(red_stand_img, (int(red_x), int(red_y)))
 
         # 底部文字
-        info = small_font.render("Blue: WASD   Red: Arrows   R: restart   ESC: quit", True, (255, 255, 255))
-        screen.blit(info, (10, HEIGHT - 26))
+        info_text = "Blue: WASD   Red: Arrows   R: restart   ESC: quit"
+        draw_text_with_shadow(screen, small_font, info_text, (10, HEIGHT - 26), color=(255,255,255), shadow_offset=(2,2), shadow_color=(10,10,10))
 
         if winner:
             w_surf = font.render(f"Winner: {winner}", True, (255, 204, 0))
