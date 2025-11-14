@@ -33,6 +33,12 @@ PLAYER_SPEED = 2.4
 IMG = "maze/assets/background_maze.png"
 OUT = "maze/level_maze.txt"
 TILE = 32               # 800x480 -> 25x15
+# 音乐文件路径
+MUSIC_FILE = "assets/maze_background_music.mp3"
+# 全局变量
+music_playing = False
+beats = []
+current_beat_index = 0
 
 
 def is_hay_wall(rgb):
@@ -154,25 +160,8 @@ def main():
         # Move the button to the bottom-right corner with some padding
         padding = 18
         btn_rect = pygame.Rect(WIDTH - btn_size - padding, HEIGHT - btn_height - padding, btn_size, btn_height)
-
-        # try to play menu music if available
-        music_paths = ["assets/menu_music.mp3", "assets/menu_music.ogg", "assets/menu_music.wav"]
+        # whether optional menu music was started (used to fadeout on start)
         music_loaded = False
-        try:
-            pygame.mixer.init()
-            for mp in music_paths:
-                if Path(mp).exists():
-                    try:
-                        pygame.mixer.music.load(mp)
-                        pygame.mixer.music.set_volume(0.6)
-                        pygame.mixer.music.play(-1)
-                        music_loaded = True
-                        print(f"[music] playing {mp}")
-                        break
-                    except Exception:
-                        continue
-        except Exception:
-            music_loaded = False
 
         while True:
             for event in pygame.event.get():
@@ -333,6 +322,57 @@ def main():
     bg = bg_image.copy()
     # Show the start screen now that the background is ready
     show_start_screen()
+    # stop any menu music and start maze background music if available
+    # make loading robust: some files may have wrong extensions (e.g. a WAV saved as .mp3)
+    maze_music_sound = None
+    maze_music_channel = None
+    maze_music_using_sound = False
+    try:
+        if pygame.mixer.get_init():
+            try:
+                pygame.mixer.music.stop()
+            except Exception:
+                pass
+        maze_music_paths = ["assets/maze_background_music.mp3", "assets/maze_background_music.ogg", "assets/maze_background_music.wav"]
+        for mp in maze_music_paths:
+            if Path(mp).exists():
+                try:
+                    # quick header sniff: RIFF -> WAV/PCM data even if extension is .mp3
+                    try:
+                        with open(mp, "rb") as fh:
+                            header = fh.read(12)
+                    except Exception:
+                        header = b""
+
+                    if header.startswith(b"RIFF") or b"WAVE" in header:
+                        # load as a Sound object (WAV/PCM) to avoid backend mp3 decoder errors
+                        try:
+                            s = pygame.mixer.Sound(mp)
+                            s.set_volume(0.5)
+                            ch = s.play(loops=-1)
+                            maze_music_sound = s
+                            maze_music_channel = ch
+                            maze_music_using_sound = True
+                            print(f"[music] maze sound playing {mp} (loaded as WAV/PCM)")
+                            break
+                        except Exception:
+                            # fallthrough to try music.load below
+                            pass
+
+                    # fallback: try to load via music (MP3/OGG)
+                    try:
+                        pygame.mixer.music.load(mp)
+                        pygame.mixer.music.set_volume(0.5)
+                        pygame.mixer.music.play(-1)
+                        maze_music_using_sound = False
+                        print(f"[music] maze music playing {mp}")
+                        break
+                    except Exception:
+                        continue
+                except Exception:
+                    continue
+    except Exception:
+        pass
     
     # 从背景图片中提取一个草垛块作为纹理（如果需要）
     # 草垛纹理：从图片中提取一个40x40的区域
@@ -538,6 +578,27 @@ def main():
                     red_anim_counter = 0
                     # regenerate a fresh random maze on restart
                     OBSTACLES = generate_obstacles(cell=40, passage_expand=0)
+                    # restart maze background music if available
+                    try:
+                        if pygame.mixer.get_init():
+                            # If we previously loaded the maze music as a Sound, replay via that
+                            if 'maze_music_using_sound' in locals() and maze_music_using_sound and 'maze_music_sound' in locals() and maze_music_sound is not None:
+                                try:
+                                    maze_music_sound.stop()
+                                except Exception:
+                                    pass
+                                try:
+                                    maze_music_sound.play(loops=-1)
+                                except Exception:
+                                    pass
+                            else:
+                                # otherwise try to restart the music playback from the music module
+                                try:
+                                    pygame.mixer.music.play(-1)
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
 
         keys = pygame.key.get_pressed()
 
